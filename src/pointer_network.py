@@ -1,7 +1,7 @@
 import tensorflow.keras as keras
 import tensorflow as tf
 import numpy as np
-from pointer_components import Encoder, Decoder, Attention, PointerSwitch
+from .pointer_components import Encoder, Decoder, Attention, PointerSwitch
 tf.enable_eager_execution()
 
 
@@ -159,4 +159,4 @@ class PointerNetwork(keras.Model):
 
     def train_on_batch(self, X, y, gen):
         self.optimizer.minimize(lambda: self.__train_batch(X, y, gen))
-        return self._loss
+        return [self._loss]
