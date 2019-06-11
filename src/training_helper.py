@@ -6,7 +6,7 @@ import tensorflow as tf
 from .log_helpers import progress_eta, log_scalar, setup_tensoroard
 
 def train_model(model, train_generator, val_generator, training_size, epochs, batch_size,
-                metric_names, best_model_metric, smooth_window=25, weights_dir='./', log_dir='./log'):
+                metric_names, val_metric_names, best_model_metric, smooth_window=25, weights_dir='./', log_dir='./log'):
     
     assert best_model_metric in metric_names
     
@@ -41,7 +41,7 @@ def train_model(model, train_generator, val_generator, training_size, epochs, ba
         train_epoch(model, train_generator, epoch, metrics, data)
         
         # Validate Last Epoch
-        val_epoch(model, val_generator, epoch, metric_names, 
+        val_epoch(model, val_generator, epoch, val_metric_names, 
                   best_model_metric, weights_dir, data)
 
 
@@ -80,8 +80,8 @@ def train_epoch(model, train_generator, epoch, metrics, data):
         log_batch(metrics, iteration, epoch, data)
         
 
-def val_epoch(model, val_generator, epoch, metrics, best_model_metric, weights_dir, data):
-    total_metrics = dict([('val_' + metric, []) for metric in metrics])
+def val_epoch(model, val_generator, epoch, val_metrics, best_model_metric, weights_dir, data):
+    total_metrics = dict([('val_' + metric, []) for metric in val_metrics])
     mean_metrics = {}
 
     # Compute validation in batches
@@ -89,7 +89,7 @@ def val_epoch(model, val_generator, epoch, metrics, best_model_metric, weights_d
         metrics_ = model.evaluate(*args, verbose=0)
 
         for i, metric in enumerate(metrics_):
-            total_metrics['val' + metrics[i]].append(metric)
+            total_metrics['val' + val_metrics[i]].append(metric)
 
     # Average results & Log on Tensorboard
     for key, total_metric in total_metrics.items():
