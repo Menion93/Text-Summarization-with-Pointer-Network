@@ -2,19 +2,8 @@ import datetime
 import time
 import numpy as np
 import math
-
-
-def log_scalar(name, value):
-    with tf.contrib.summary.always_record_summaries():
-        tf.contrib.summary.scalar(name, value)
-
-
-def setup_tensoroard(log_dir):
-    summary_writer = tf.contrib.summary.create_file_writer(log_dir, flush_millis=10000)
-    summary_writer.set_as_default()
-    global_step = tf.train.get_or_create_global_step()
-    return global_step
-
+import tensorflow as tf
+from .log_helpers import progress_eta, log_scalar, setup_tensoroard
 
 def train_model(model, train_generator, val_generator, training_size, epochs, batch_size,
                 metric_names, best_model_metric, smooth_window=25, weights_dir='./', log_dir='./log'):
@@ -49,14 +38,14 @@ def train_model(model, train_generator, val_generator, training_size, epochs, ba
         metrics = init_metrics()
 
         # Start Training Epoch
-        train_epoch(model, train_generator, metrics, data)
+        train_epoch(model, train_generator, epoch, metrics, data)
         
         # Validate Last Epoch
         val_epoch(model, val_generator, epoch, metric_names, 
                   best_model_metric, weights_dir, data)
 
 
-def log_batch(metrics, i, data):
+def log_batch(metrics, i, epoch, data):
     if i > data['window']:
         metrics_string = 'Epoch: {}'.format(epoch)
 
@@ -64,7 +53,7 @@ def log_batch(metrics, i, data):
         data['global_step'].assign_add(1)
 
         for m_name, m_lst in  metrics.items():
-            metrics[m_name] = metrics[m_name][:window]
+            metrics[m_name] = metrics[m_name][:data['window']]
             log_scalar(m_name, np.mean(m_lst))
             metrics_string += '\t{0}: {1:.2}'.format(m_name, np.mean(m_lst))
 
@@ -78,7 +67,7 @@ def log_batch(metrics, i, data):
         data['prev_time'] = data['c_time']
 
 
-def train_epoch(model, train_generator, metrics, data):
+def train_epoch(model, train_generator, epoch, metrics, data):
     for iteration, args in enumerate(train_generator):
         data['prev_time'] = time.time()
         # Do a train step on a single batch
@@ -88,7 +77,7 @@ def train_epoch(model, train_generator, metrics, data):
         for metric, (_, lst) in zip(logs, metrics.items()):
             lst.insert(0, metric)
         
-        log_batch(metrics, iteration, data)
+        log_batch(metrics, iteration, epoch, data)
         
 
 def val_epoch(model, val_generator, epoch, metrics, best_model_metric, weights_dir, data):
@@ -96,7 +85,7 @@ def val_epoch(model, val_generator, epoch, metrics, best_model_metric, weights_d
     mean_metrics = {}
 
     # Compute validation in batches
-    for args in validation_generator:
+    for args in val_generator:
         metrics_ = model.evaluate(*args, verbose=0)
 
         for i, metric in enumerate(metrics_):
