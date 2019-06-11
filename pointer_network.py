@@ -29,6 +29,7 @@ class PointerNetwork(keras.Model):
         self.padding_char = padding_char
 
         self.optimizer = tf.train.AdamOptimizer()
+        self._loss = 0 # used during training
 
     def set_embeddings_layer(self, embeddings_layer):
         self.embeddings = embeddings_layer
@@ -153,8 +154,9 @@ class PointerNetwork(keras.Model):
         # Dont forget to divide by summary lenght N, since we lose the /N component n by calling
         # N times softmax cross entropy
         loss = loss / int(y.shape[1]-1)
-        print(loss)
+        self._loss = loss
         return loss
 
-    def train_batch(self, X, y, gen):
-        return self.optimizer.minimize(lambda: self.__train_batch(X, y, gen))
+    def train_on_batch(self, X, y, gen):
+        self.optimizer.minimize(lambda: self.__train_batch(X, y, gen))
+        return self._loss
