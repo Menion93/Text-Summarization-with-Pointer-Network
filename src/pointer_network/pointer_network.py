@@ -1,21 +1,15 @@
-import tensorflow.keras as keras
 import tensorflow as tf
 import numpy as np
 from .pointer_components import Encoder, Decoder, Attention, PointerSwitch
+from .decode import PointerDecoder
+from .eval import rouge_score
+
 tf.enable_eager_execution()
 
 
-class PointerNetwork(keras.Model):
-    def __init__(self,
-                 enc_units,
-                 dec_units,
-                 voc_size,
-                 att_units,
-                 switch_units,
-                 max_len,
-                 start_token,
-                 end_token,
-                 padding_char):
+class PointerNetwork(tf.keras.Model):
+    def __init__(self, enc_units, dec_units, voc_size, att_units, switch_units,
+                 max_len, start_token, end_token, padding_char):
         super().__init__()
         self.encoder = Encoder(enc_units)
         self.decoder = Decoder(dec_units, voc_size)
@@ -29,67 +23,17 @@ class PointerNetwork(keras.Model):
         self.padding_char = padding_char
 
         self.optimizer = tf.train.AdamOptimizer()
-        self._loss = 0 # used during training
+        self._loss = 0  # used during training
 
     def set_embeddings_layer(self, embeddings_layer):
         self.embeddings = embeddings_layer
+        self.pointer_decoder = PointerDecoder(self.embeddings, self.encoder,
+                                              self.decoder, self.attention, self.pointer_switch,
+                                              self.max_len, self.start_token, self.end_token)
 
     def predict_batch(self, X):
         assert self.embeddings, "Call self.set_embeddings_layer first"
-        X = tf.convert_to_tensor(X)
-
-        embed = self.embeddings(X)
-        enc_states, h1, h2 = self.encoder(embed)
-        input_tokens = tf.convert_to_tensor(
-            [self.start_token] * embed.shape[0])
-        # put last encoder state as attention vec at start
-        c_vec = h1
-        outputs = []
-
-        for _ in range(self.max_len):
-            dec_input = self.embeddings(input_tokens)
-            decoded_state, h1, h2, decoded_probs = self.decoder(dec_input,
-                                                                c_vec,
-                                                                [h1, h2])
-            c_vec, pointer_probs = self.attention(enc_states,
-                                                  decoded_state)
-
-            # Compute switch probability to decide where to extract the next
-            # word token
-            switch_probs = self.pointer_switch(h1, c_vec)
-            # Decode based on switch probs
-            input_tokens = self.decode_next_word(switch_probs,
-                                                 decoded_probs,
-                                                 X,
-                                                 pointer_probs)
-            outputs.append(input_tokens)
-
-        return tf.transpose(tf.convert_to_tensor(outputs))
-
-    def decode_next_word(self, switch_probs, decoded_probs, inputs, att_probs):
-        sampled_probs = tf.random.uniform(switch_probs.shape, 0, 1)
-        tokens = []
-        token = None
-
-        for prob, sampled, decoded, inp, att_p in zip(switch_probs,
-                                                      sampled_probs,
-                                                      decoded_probs,
-                                                      inputs,
-                                                      att_probs):
-            if prob.numpy()[0] >= sampled.numpy()[0]:
-                token = self.fixed_vocab_decode(decoded)
-            else:
-                token = self.pointer_greedy_search(att_p, inp)
-
-            tokens.append(token)
-
-        return tf.convert_to_tensor(tokens, dtype=tf.float32)
-
-    def pointer_greedy_search(self, probs, inputs):
-        return inputs[tf.argmax(probs)]
-
-    def fixed_vocab_decode(self, decoded_probs):
-        return tf.argmax(decoded_probs)
+        return self.pointer_decoder.predict_batch(X)
 
     def pointer_batch_loss(self, gen, y, d_prob, p_prob, s_prob):
         # Compute the mask to ignore the padding in the loss
@@ -160,3 +104,7 @@ class PointerNetwork(keras.Model):
     def train_on_batch(self, X, y, gen):
         self.optimizer.minimize(lambda: self.__train_batch(X, y, gen))
         return [self._loss]
+
+    def evaluate(self, X, y, verbose=0):
+        y_ = self.predict_batch(X)
+        return rouge_score(y, y_)
