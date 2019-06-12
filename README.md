@@ -1,1 +1,4 @@
-# DeepTextGeneration
+# Text Summarization with Pointer Network
+![Pointer Network Image](https://snag.gy/jYLZJQ.jpg)
+## Intro
+Pointer networks was first introduced by Google researches in order to overcome the obstacle of selecting a fixed output in the sequence to sequence architecture. The network instead has the ability to choose the output directly from the input as we can now solve problems like sorting a variable number of inputs by generating a distribution over the input sequence. Further research applied this architecture in Text generation by stanford & google researcher, bringing us the cited paper [Get to the point](https://arxiv.org/abs/1704.04368) which used pointer network that could select the next word directly from the input document, allowing more accurate generated summaries. In this work we repropose an implementation of the pointer network in tensorflow that was trained on the [CNN news dataset](https://github.com/abisee/cnn-dailymail)
