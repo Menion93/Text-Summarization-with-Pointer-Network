@@ -10,7 +10,7 @@ def setup_tensoroard(log_dir):
     summary_writer = tf.contrib.summary.create_file_writer(log_dir, flush_millis=10000)
     summary_writer.set_as_default()
     global_step = tf.train.get_or_create_global_step()
-    return global_step
+    return global_step, summary_writer
 
 def progress_eta(count, total, prev_time, c_time, prev_mean, status=''):
     bar_len = 60

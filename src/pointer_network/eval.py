@@ -13,7 +13,7 @@ def rouge_score(y, y_):
 
     values = []
     for key in scores[0].keys():
-        for sub_metric in ['f', 'p', 'r']:
+        for sub_metric in ['p', 'r', 'f']:
             mean_score = np.mean(mmap(lambda x: x[key][sub_metric], scores))
             values.append(mean_score)
     return values
