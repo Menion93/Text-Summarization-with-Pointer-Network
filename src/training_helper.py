@@ -5,11 +5,12 @@ import math
 import tensorflow as tf
 from .log_helpers import progress_eta, log_scalar, setup_tensoroard
 
+
 def train_model(model, train_generator, val_generator, training_size, epochs, batch_size,
                 metric_names, val_metric_names, best_model_metric, smooth_window=25, weights_dir='./', log_dir='./log'):
-    
-    assert best_model_metric in metric_names
-    
+
+    assert best_model_metric in val_metric_names
+
     data = {
         'current_score': 0,
         'best_score': 0,
@@ -20,16 +21,16 @@ def train_model(model, train_generator, val_generator, training_size, epochs, ba
         'num_iterations': math.ceil(training_size / batch_size),
         'window': smooth_window
     }
-    
+
     # Setup Metrics and Logging
-    init_metrics = lambda: dict([(name,[]) for name in metric_names])
-    
+    def init_metrics(): return dict([(name, []) for name in metric_names])
+
     print('Start training...')
     print("Number of iterations per epoch is: " + str(data['num_iterations']))
     print()
 
     # Tensorboard setup
-    global_step = setup_tensoroard(log_dir)
+    global_step, summary_writer = setup_tensoroard(log_dir)
     data['global_step'] = global_step
 
     # Training Loop
@@ -39,9 +40,9 @@ def train_model(model, train_generator, val_generator, training_size, epochs, ba
 
         # Start Training Epoch
         train_epoch(model, train_generator, epoch, metrics, data)
-        
+
         # Validate Last Epoch
-        val_epoch(model, val_generator, epoch, val_metric_names, 
+        val_epoch(model, val_generator, epoch, val_metric_names,
                   best_model_metric, weights_dir, data)
 
 
@@ -52,18 +53,18 @@ def log_batch(metrics, i, epoch, data):
         # Tensorboard add step
         data['global_step'].assign_add(1)
 
-        for m_name, m_lst in  metrics.items():
+        for m_name, m_lst in metrics.items():
             metrics[m_name] = metrics[m_name][:data['window']]
             log_scalar(m_name, np.mean(m_lst))
             metrics_string += '\t{0}: {1:.2}'.format(m_name, np.mean(m_lst))
 
         # print progress
-        data['mean'] = progress_eta(i + 1 - data['window'], 
-                                data['num_iterations']-data['window'],
-                                data['prev_time'], 
-                                data['c_time'],
-                                data['mean'], 
-                                metrics_string)
+        data['mean'] = progress_eta(i + 1 - data['window'],
+                                    data['num_iterations']-data['window'],
+                                    data['prev_time'],
+                                    data['c_time'],
+                                    data['mean'],
+                                    metrics_string)
         data['prev_time'] = data['c_time']
 
 
@@ -76,9 +77,9 @@ def train_epoch(model, train_generator, epoch, metrics, data):
 
         for metric, (_, lst) in zip(logs, metrics.items()):
             lst.insert(0, metric)
-        
+
         log_batch(metrics, iteration, epoch, data)
-        
+
 
 def val_epoch(model, val_generator, epoch, val_metrics, best_model_metric, weights_dir, data):
     total_metrics = dict([('val_' + metric, []) for metric in val_metrics])
@@ -108,7 +109,23 @@ def val_epoch(model, val_generator, epoch, val_metrics, best_model_metric, weigh
         data['best_score'] = data['current_score']
         print("Saved. ")
 
-    print("Validation Accuracy in is {0:.6f} at epoch {1}"\
+    print("Validation Accuracy in is {0:.6f} at epoch {1}"
           .format(np.mean(mean_metrics['val_acc']), epoch))
-    print("Validation Top K Accuracy is {0:.6f} at epoch {1}"\
+    print("Validation Top K Accuracy is {0:.6f} at epoch {1}"
           .format(np.mean(mean_metrics['val_top_k']), epoch))
+
+
+def evaluate_model(model, test_generator, test_metrics):
+    total_metrics = dict([(metric, []) for metric in test_metrics])
+
+    # Compute validation in batches
+    for args in test_generator:
+        metrics_ = model.evaluate(*args, verbose=0)
+
+        for i, metric in enumerate(metrics_):
+            total_metrics[test_metrics[i]].append(metric)
+
+    print('Test Set Metrics:')
+    # Average results & Log on Tensorboard
+    for key, total_metric in total_metrics.items():
+        print("{0} -- {1}".format(key, np.mean(total_metric)))
